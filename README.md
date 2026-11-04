@@ -1,18 +1,28 @@
-# 산책 Sanchek · 한국 내 주변 산책 장소 추천
+# 산책 Sanchek · 한국 내 주변 공원 산책 추천
 
 운영 URL: https://holiday-api-tau.vercel.app/
 
-- 위치 권한을 허용한 뒤 한국 내 주변 공원·이름이 있는 산책로·자연보호구역을 검색합니다. 수동 지역/좌표 입력도 가능합니다.
-- 반경 2/5/10km, 직선거리순 최대 20곳. 경로 거리·안전성·개방 상태를 보장하지 않습니다.
-- 데이터: OpenStreetMap / Overpass (Private.coffee 공개 인스턴스). 공개 서비스 지연·실패 시 오류와 재시도 안내를 표시합니다. 그림은 실제 장소 사진이 아닌 삽화입니다.
-- 좌표는 소수 셋째 자리로 반올림해 POST 본문으로 전달합니다. 위치는 댓글 DB에 저장하지 않습니다.
-- `api/comments.js`: 장소별 최신 댓글 20개 조회/저장. `walk_comments`에 OSM 장소 ID, 별명, 내용, 등록 시각을 저장합니다.
-- SQL: `supabase/walk-comments.sql`. RLS 활성화, 공개 SELECT만 허용. 서버 secret key로만 작성합니다. 댓글은 textContent로 표시합니다.
-- 환경 변수는 기존 SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY / SUPABASE_SECRET_KEY를 사용합니다. 키 값은 저장소에 넣지 않습니다.
-- 검증: Node 단위 시험 40개 통과. 실제 지도 서비스의 응답 및 배포 후 댓글 저장은 별도 운영 검증이 필요합니다.
-- 기존 공휴일 과제: `/holidays.html`, 한 줄 방명록: `/guestbook.html`.
+위치 권한을 허용하거나 지역/좌표를 직접 선택하면 한국 내 주변 공원을 직선거리순으로 추천합니다. 반경 2/5/10km, 최대 30곳. 공원·소공원·어린이공원 분류와 지도·장소별 댓글을 제공합니다.
 
-공식 문서: https://wiki.openstreetmap.org/wiki/Overpass_API · https://www.openstreetmap.org/copyright
+## 실제 데이터와 사진
+- 공공데이터포털 전국도시공원정보표준데이터 (2026-11-04 다운로드): https://www.data.go.kr/data/15012890/standard.do
+- 유효 좌표와 이름이 있는 17,823곳을 포함합니다. 원본 13MB에서 주소·종류·시설·기준일·좌표만 정리했습니다. 누락/좌표 오류/갱신 지연이 있을 수 있습니다.
+- 위치는 0.001도 단위로 반올림해 POST 본문으로 전달하며 댓글 DB에 저장하지 않습니다. 주변 검색은 외부 위치 API 없이 데이터에서 계산합니다.
+- 사진은 한국어 위키백과의 이름과 좌표가 일치하는 장소를 찾아 Wikimedia Commons의 출처·저자·라이선스와 함께 표시합니다. 사진이 없거나 로딩 실패하면 '경관 삽화'를 표시합니다. 삽화를 실사로 표시하지 않습니다.
+- 지도: OpenStreetMap 임베드. 지도 링크: Kakao Map. 거리·개방 상태·통행 가능성을 보장하지 않습니다.
+
+## 데이터베이스 / 과제 구현
+- `walk_comments`: id UUID, created_at, place_id, name(1–20자), message(1–200자).
+- `supabase/walk-comments.sql` 후 `supabase/walk-official-ids.sql`을 순서대로 실행합니다. 기존 표와 댓글을 삭제하지 않습니다.
+- RLS 활성화, anon/authenticated SELECT만 허용; 입력 검증 후 서버 secret key로만 저장합니다. 화면은 댓글을 textContent로 표시합니다.
+- 환경 변수: SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY / SUPABASE_SECRET_KEY. 실제 값은 저장소에 넣지 않습니다.
+- GET `/api/comments?place=park/...` 최신 댓글 20개, POST `/api/comments` 장소별 댓글 저장.
+- 공휴일 과제 `/holidays.html`, 원래 방명록 `/guestbook.html` 보존.
+
+## 검증
+- Node 시험: 40개 통과. 전국 데이터 좌표/중복, 실제 서울·부산 검색, 거리 정렬과 범위, 댓글 장소 격리·키 분리를 확인했습니다.
+- Supabase 댓글 표 생성 및 RLS SELECT 정책 확인 완료.
+- 배포 후 사진 표시, 실제 댓글 작성·새로고침 유지 여부는 운영 검증 결과로 별도 기록합니다. 키 미설정 시 댓글은 명시적인 연결 오류를 표시합니다.
 
 ---
 
