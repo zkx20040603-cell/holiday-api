@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>한 줄 방명록</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f7fb;color:#172b42;font:16px/1.65 system-ui,sans-serif}main{max-width:760px;margin:auto;padding:32px 20px}a{color:#225ea8}h1{font-size:2rem;margin-bottom:8px}form{background:white;padding:24px;border:1px solid #d9e0eb;border-radius:12px;margin:28px 0}label{display:block;font-weight:650;margin-top:14px}input,textarea{width:100%;font:inherit;padding:10px;border:1px solid #8a9db3;border-radius:6px}button{font:inherit;cursor:pointer;border:0;border-radius:6px;padding:10px 18px;background:#235fa0;color:white;margin-top:12px}button:disabled{opacity:.6;cursor:wait}li{background:white;border-bottom:1px solid #d9e0eb;padding:18px;overflow-wrap:anywhere}ul{list-style:none;padding:0}li p{white-space:pre-wrap;margin:8px 0}time{font-size:.85rem;color:#53657a}[hidden]{display:none!important}.hint{color:#53657a;font-size:.9rem}.error{color:#a52929}
+</style></head><body><main>
+<a href="/">← 공휴일 조회</a><h1>한 줄 방명록</h1><p>이 서비스에 대한 의견을 남겨 주세요. 최근 20개의 글을 보여 드립니다.</p>
+<form id="form"><p class="hint">글은 모두에게 공개됩니다. 별명을 사용하고 전화번호·학번 등 개인정보는 적지 마세요.</p>
+<label for="name">별명</label><input id="name" name="name" required autocomplete="off" aria-describedby="limits">
+<label for="message">내용</label><textarea id="message" name="message" required rows="3" aria-describedby="limits"></textarea>
+<p id="limits" class="hint">별명 1~20자 · 내용 1~200자</p><button id="submit" type="submit">남기기</button><p id="feedback" role="status" aria-live="polite"></p></form>
+<h2>최근 글</h2><p id="status" role="status" aria-live="polite">불러오는 중…</p><button id="retry" type="button" hidden>다시 불러오기</button><ul id="entries"></ul>
+<script type="module">
+const $=id=>document.getElementById(id);let loading=false;
+async function load(){if(loading)return;loading=true;$('status').textContent='불러오는 중…';$('retry').hidden=true;$('entries').replaceChildren();try{const r=await fetch('/api/guestbook',{cache:'no-store'});const data=await r.json();if(!r.ok)throw Error(data.error||'불러오지 못했습니다.');if(!Array.isArray(data.entries))throw Error('응답 형식을 확인해 주세요.');for(const entry of data.entries){const li=document.createElement('li'),name=document.createElement('strong'),p=document.createElement('p'),time=document.createElement('time');name.textContent=entry.name;p.textContent=entry.message;const date=new Date(entry.created_at);if(!Number.isNaN(date.getTime())){time.dateTime=date.toISOString();time.textContent=date.toLocaleString('ko-KR');}li.append(name,p,time);$('entries').append(li);}$('status').textContent=data.entries.length?'':'아직 글이 없습니다. 첫 글을 남겨 주세요.';}catch(e){$('status').textContent=e.message;$('retry').hidden=false;}finally{loading=false;}}
+$('retry').addEventListener('click',load);
+$('form').addEventListener('submit',async e=>{e.preventDefault();const name=$('name').value.trim(),message=$('message').value.trim();if(!name||Array.from(name).length>20||!message||Array.from(message).length>200){$('feedback').textContent='별명은 1~20자, 내용은 1~200자로 입력해 주세요.';return;}$('submit').disabled=true;$('feedback').textContent='저장하는 중…';try{const r=await fetch('/api/guestbook',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,message})});const data=await r.json();if(!r.ok)throw Error(data.error||'저장하지 못했습니다.');$('message').value='';$('feedback').textContent='저장했습니다.';await load();}catch(e){$('feedback').textContent=e.message;}finally{$('submit').disabled=false;}});
+load();
+</script></main></body></html>
