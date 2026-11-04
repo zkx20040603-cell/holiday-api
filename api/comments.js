@@ -10,7 +10,7 @@ export function createHandler({env = process.env, client = defaultClient} = {}) 
   return async function handle(request) {
     if (!['GET','POST'].includes(request.method)) return json(405, {code:'METHOD_NOT_ALLOWED',error:'GET 또는 POST만 가능합니다.'}, {Allow:'GET, POST'});
     const place = new URL(request.url).searchParams.get('place');
-    if (request.method === 'GET' && !/^(node|way|relation)\/[1-9]\d{0,14}$/.test(place || '')) return json(400,{error:'请选择一个散步地点。'});
+    if (request.method === 'GET' && !/^((node|way|relation)\/[1-9]\d{0,14}|park\/[a-f0-9]{24})$/.test(place || '')) return json(400,{error:'请选择一个散步地点。'});
     let entry;
     if (request.method === 'POST') {
       if (!(request.headers.get('content-type') || '').split(';')[0].trim().toLowerCase().match(/^application\/json$/))
@@ -21,7 +21,7 @@ export function createHandler({env = process.env, client = defaultClient} = {}) 
         const body = JSON.parse(raw);
         if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(k => !['name','message','place_id'].includes(k)) || typeof body.name !== 'string' || typeof body.message !== 'string')
           return json(400,{code:'BAD_INPUT',error:'별명과 내용을 입력해 주세요.'});
-        if (!/^(node|way|relation)\/[1-9]\d{0,14}$/.test(body.place_id || '')) return json(400,{error:'地点编号有误。'});
+        if (!/^((node|way|relation)\/[1-9]\d{0,14}|park\/[a-f0-9]{24})$/.test(body.place_id || '')) return json(400,{error:'地点编号有误。'});
         entry = {name:body.name.trim(),message:body.message.trim(),place_id:body.place_id};
         if (size(entry.name)<1 || size(entry.name)>20 || size(entry.message)<1 || size(entry.message)>200)
           return json(400,{code:'BAD_INPUT',error:'별명은 1~20자, 내용은 1~200자로 입력해 주세요.'});
