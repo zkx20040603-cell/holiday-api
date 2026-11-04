@@ -1,0 +1,16 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {createHandler} from '../api/guestbook.js';
+const env={SUPABASE_URL:'https://example.supabase.co',SUPABASE_PUBLISHABLE_KEY:'public-test',SUPABASE_SECRET_KEY:'server-test'};
+const req=(body,headers={'Content-Type':'application/json'})=>new Request('https://example.test/api/guestbook',{method:'POST',headers,body:typeof body==='string'?body:JSON.stringify(body)});
+function fixture(error=null){const calls=[];const chain={select:(...a)=>(calls.push(['select',...a]),chain),order:(...a)=>(calls.push(['order',...a]),chain),limit:async(...a)=>(calls.push(['limit',...a]),{data:[],error}),insert:async(...a)=>(calls.push(['insert',...a]),{error})};return {calls,handler:createHandler({env,client:async(url,key)=>{calls.push(['key',key]);return {from:table=>(calls.push(['table',table]),chain)};}})};}
+test('GET uses public key, newest-first order and maximum 20 entries',async()=>{const {handler,calls}=fixture();const r=await handler(new Request('https://example.test/api/guestbook'));assert.equal(r.status,200);assert.deepEqual(await r.json(),{entries:[]});assert.ok(calls.some(c=>c[0]==='key'&&c[1]==='public-test'));assert.ok(calls.some(c=>c[0]==='limit'&&c[1]===20));assert.ok(calls.some(c=>c[0]==='order'&&c[2].ascending===false));});
+test('POST uses server key and trims input',async()=>{const {handler,calls}=fixture();const r=await handler(req({name:' 민지 ',message:' 좋아요 '}));assert.equal(r.status,201);assert.deepEqual(calls.find(c=>c[0]==='insert')[1],{name:'민지',message:'좋아요'});assert.ok(calls.some(c=>c[0]==='key'&&c[1]==='server-test'));});
+for(const [label,body] of [['empty name',{name:' ',message:'ok'}],['long name',{name:'가'.repeat(21),message:'ok'}],['empty message',{name:'a',message:''}],['201 characters',{name:'a',message:'가'.repeat(201)}],['extra fields',{name:'a',message:'b',id:'spoof'}],['null',null],['array',[]],['nonstring',{name:42,message:'ok'}]])test('rejects '+label,async()=>{const {handler,calls}=fixture();assert.equal((await handler(req(body))).status,400);assert.equal(calls.length,0);});
+test('malformed JSON returns 400',async()=>assert.equal((await fixture().handler(req('{'))).status,400));
+test('non-JSON returns 400',async()=>assert.equal((await fixture().handler(req('hello',{'Content-Type':'text/plain'}))).status,400));
+test('missing key returns NO_KEY',async()=>{const r=await createHandler({env:{}})(new Request('https://example.test/api/guestbook'));assert.equal(r.status,500);assert.equal((await r.json()).code,'NO_KEY');});
+test('database read failure returns 502',async()=>assert.equal((await fixture({message:'private'}).handler(new Request('https://example.test/api/guestbook'))).status,502));
+test('database write failure does not expose details',async()=>{const r=await fixture({message:'private'}).handler(req({name:'a',message:'b'}));assert.equal(r.status,502);assert.ok(!(await r.text()).includes('private'));});
+test('unsupported methods return 405',async()=>assert.equal((await fixture().handler(new Request('https://example.test/api/guestbook',{method:'DELETE'}))).status,405));
+test('Unicode code points at limit are accepted',async()=>assert.equal((await fixture().handler(req({name:'😀'.repeat(20),message:'가'.repeat(200)}))).status,201));
