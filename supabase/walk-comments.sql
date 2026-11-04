@@ -3,7 +3,7 @@ begin;
 create table public.walk_comments (
  id uuid primary key default gen_random_uuid(),
  created_at timestamptz not null default now(),
- place_id text not null check (place_id ~ '^(node|way|relation)/[1-9][0-9]{0,14}$'),
+ place_id text not null check (place_id ~ '^((node|way|relation)/[1-9][0-9]{0,14}|park/[a-f0-9]{24})$'),
  name text not null check (char_length(name) between 1 and 20),
  message text not null check (char_length(message) between 1 and 200)
 );
