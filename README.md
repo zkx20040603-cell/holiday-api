@@ -1,3 +1,23 @@
+# 산책 Sanchek · 한국 내 주변 산책 장소 추천
+
+운영 URL: https://holiday-api-tau.vercel.app/
+
+- 위치 권한을 허용한 뒤 한국 내 주변 공원·이름이 있는 산책로·자연보호구역을 검색합니다. 수동 지역/좌표 입력도 가능합니다.
+- 반경 2/5/10km, 직선거리순 최대 20곳. 경로 거리·안전성·개방 상태를 보장하지 않습니다.
+- 데이터: OpenStreetMap / Overpass (Private.coffee 공개 인스턴스). 공개 서비스 지연·실패 시 오류와 재시도 안내를 표시합니다. 그림은 실제 장소 사진이 아닌 삽화입니다.
+- 좌표는 소수 셋째 자리로 반올림해 POST 본문으로 전달합니다. 위치는 댓글 DB에 저장하지 않습니다.
+- `api/comments.js`: 장소별 최신 댓글 20개 조회/저장. `walk_comments`에 OSM 장소 ID, 별명, 내용, 등록 시각을 저장합니다.
+- SQL: `supabase/walk-comments.sql`. RLS 활성화, 공개 SELECT만 허용. 서버 secret key로만 작성합니다. 댓글은 textContent로 표시합니다.
+- 환경 변수는 기존 SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY / SUPABASE_SECRET_KEY를 사용합니다. 키 값은 저장소에 넣지 않습니다.
+- 검증: Node 단위 시험 40개 통과. 실제 지도 서비스의 응답 및 배포 후 댓글 저장은 별도 운영 검증이 필요합니다.
+- 기존 공휴일 과제: `/holidays.html`, 한 줄 방명록: `/guestbook.html`.
+
+공식 문서: https://wiki.openstreetmap.org/wiki/Overpass_API · https://www.openstreetmap.org/copyright
+
+---
+
+## 기존 9·10주차 실습 기록 (아래 기록은 산책 기능 배포 전의 기록)
+
 # 월별 공휴일 조회 · Vercel 함수 예제
 
 **사용자가 연·월을 고르면 Vercel 함수가 공공데이터(한국천문연구원 특일 정보)를 그 자리에서 조회해 목록으로 보여 주는 예제**입니다. 인증키는 Vercel 환경 변수에 두고, 함수는 서울 리전(`icn1`)에서 실행하며, 같은 조건의 응답은 CDN 캐시에 1시간 보관해 공공데이터 호출 수를 줄입니다. 공휴일 조회는 외부 패키지 없이 동작합니다. 10주차 방명록은 서버에서 @supabase/supabase-js를 사용합니다.
