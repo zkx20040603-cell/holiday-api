@@ -4,10 +4,10 @@ import {createHandler} from '../api/suggest.js';
 const data=new Map(['a','b','c'].map(id=>[id,{id,name:`공원 ${id}`,parkType:'소공원',facilities:'벤치',lat:37,lon:127}]));
 const env={HASA_API_KEY:'test-secret'},body={ids:['a','b','c'],goal:'gentle'};
 const request=(b=body)=>new Request('http://localhost/api/suggest',{method:'POST',body:JSON.stringify(b)});
-const result={suggestions:body.ids.map(id=>({id,reason:'벤치에서 잠시 쉬어 보세요.'}))};
+const result={suggestions:body.ids.map(id=>({id,reason:'벤치가 기록되어 있어 쉬는 산책을 제안해요.',action:'주변을 둘러본 뒤 벤치에서 잠시 쉬어 보세요.'}))};
 const output=(value=result)=>Response.json({choices:[{message:{content:JSON.stringify(value)}}]});
 test('AI: trusted data, minimized disclosure, bounded tokens, cache',async()=>{
- let calls=0;const handler=createHandler({env,data,fetchImpl:async(url,init)=>{calls++;assert.equal(url,'https://open.hasa.re.kr/v1/chat/completions');const b=JSON.parse(init.body);assert.equal(init.headers.Authorization,'Bearer test-secret');assert.equal(b.model,'gemma-4-31b');assert.ok(init.signal);assert.ok(b.max_tokens<=600);const p=JSON.parse(b.messages[1].content);assert.equal(p.parks[0].name,'공원 a');assert.ok(!('lat' in p.parks[0]));return output();}});
+ let calls=0;const handler=createHandler({env,data,fetchImpl:async(url,init)=>{calls++;assert.equal(url,'https://open.hasa.re.kr/v1/chat/completions');const b=JSON.parse(init.body);assert.equal(init.headers.Authorization,'Bearer test-secret');assert.equal(b.model,'gemma-4-31b');assert.ok(init.signal);assert.ok(b.max_tokens<=1100);const p=JSON.parse(b.messages[1].content);assert.equal(p.parks[0].name,'공원 a');assert.ok(!('lat' in p.parks[0]));return output();}});
  assert.equal((await handler(request())).status,200);assert.equal((await (await handler(request())).json()).cached,true);assert.equal(calls,1);
 });
 test('AI: invalid input never reaches provider',async()=>{
@@ -30,4 +30,10 @@ test('AI: throttle concurrent requests and refresh expired cache',async()=>{
  let resolve,clock=0,calls=0;const h=createHandler({env,data,now:()=>clock,fetchImpl:()=>{calls++;return new Promise(r=>{resolve=r;});}});
  const first=h(request());await new Promise(r=>setImmediate(r));assert.equal((await h(request())).status,429);resolve(output());assert.equal((await first).status,200);
  clock=300001;const third=h(request());await new Promise(r=>setImmediate(r));resolve(output());assert.equal((await third).status,200);assert.equal(calls,2);
+});
+
+test('AI: activity time validated and actionable steps required',async()=>{
+ const h=createHandler({env,data,fetchImpl:async()=>output({suggestions:body.ids.map(id=>({id,reason:'벤치'}))})});
+ assert.equal((await h(request({...body,minutes:10}))).status,400);
+ assert.equal((await h(request({...body,minutes:30}))).status,502);
 });
