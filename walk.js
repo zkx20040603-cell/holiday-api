@@ -18,8 +18,9 @@ const photoSort=document.createElement('button');photoSort.type='button';photoSo
 
 // AI replies are bound to the current search/filter/purpose; obsolete requests are cancelled.
 let aiController=null,aiVersion=0;
-function resetAI(){aiVersion++;aiController?.abort();aiController=null;$('ai-results').replaceChildren();$('ai-suggest').disabled=true;$('ai-suggest').textContent='AI 산책 제안 받기 ↗';$('ai-walk').setAttribute('aria-busy','false');$('ai-status').textContent='공원을 먼저 검색해 주세요.';}
-$('ai-goal').onchange=()=>{resetAI();const available=allPlaces.some(p=>kind==='all'||p.kind===kind);$('ai-suggest').disabled=!available;$('ai-status').textContent=available?'선택한 목적에 맞춰 다시 추천받을 수 있어요.':'공원을 먼저 검색해 주세요.';};
+function resetAI(){aiVersion++;aiController?.abort();aiController=null;$('ai-results').replaceChildren();$('ai-empty').hidden=false;$('ai-suggest').disabled=true;$('ai-suggest').textContent='AI 산책 제안 받기 ↗';$('ai-walk').setAttribute('aria-busy','false');$('ai-status').textContent='공원을 먼저 검색해 주세요.';}
+function changeAIOptions(){resetAI();const available=allPlaces.some(p=>kind==='all'||p.kind===kind);$('ai-suggest').disabled=!available;$('ai-status').textContent=available?'선택한 목적에 맞춰 다시 추천받을 수 있어요.':'공원을 먼저 검색해 주세요.';}
+$('ai-goal').onchange=changeAIOptions;$('ai-minutes').onchange=changeAIOptions;
 $('ai-suggest').onclick=async()=>{
   const candidates=allPlaces.filter(p=>kind==='all'||p.kind===kind).slice(0,12);
   if(!candidates.length||aiController)return;
@@ -27,10 +28,26 @@ $('ai-suggest').onclick=async()=>{
   const timer=setTimeout(()=>controller.abort(),23000);
   $('ai-suggest').disabled=true;$('ai-suggest').textContent='산책 제안을 고르고 있어요…';$('ai-walk').setAttribute('aria-busy','true');$('ai-status').textContent='AI가 공원 자료를 살펴보고 있어요. 최대 20초 정도 걸릴 수 있어요.';$('ai-results').replaceChildren();
   try{
-    const r=await fetch('/api/suggest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:candidates.map(p=>p.id),goal:$('ai-goal').value}),signal:controller.signal});
+    const r=await fetch('/api/suggest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:candidates.map(p=>p.id),goal:$('ai-goal').value,minutes:Number($('ai-minutes').value)}),signal:controller.signal});
     const data=await r.json();if(version!==aiVersion)return;if(!r.ok)throw Error(data.error||'산책 제안을 받지 못했어요.');
     if(!Array.isArray(data.suggestions)||!data.suggestions.length)throw Error('추천 결과를 확인하지 못했어요.');
-    for(const item of data.suggestions){const place=candidates.find(p=>p.id===item.id);if(!place)continue;const row=document.createElement('li'),name=document.createElement('h4'),reason=document.createElement('p'),button=document.createElement('button');name.textContent=place.name;reason.textContent=item.reason;button.className='secondary';button.textContent='지도와 후기 보기 ↗';button.onclick=()=>openPlace(place);row.append(name,reason,button);$('ai-results').append(row);}
+    $('ai-empty').hidden=true;
+    for(const [index,item] of data.suggestions.entries()){
+      const place=candidates.find(p=>p.id===item.id);if(!place)continue;
+      const row=document.createElement('li');row.className='walk-note';
+      const top=document.createElement('div');top.className='note-top';
+      const number=document.createElement('span');number.className='note-number';number.textContent=String(index+1).padStart(2,'0');
+      const category=document.createElement('span');category.textContent=labels[place.kind]||place.parkType;top.append(number,category);
+      const name=document.createElement('h4');name.textContent=place.name;
+      const facts=document.createElement('div');facts.className='note-facts';
+      for(const fact of ['직선 '+meters(place.distance),...(Number(place.area)>0?[Number(place.area).toLocaleString()+' ㎡']:[])]){const chip=document.createElement('span');chip.textContent=fact;facts.append(chip);}
+      const reasonLabel=document.createElement('small');reasonLabel.className='note-label';reasonLabel.textContent='이곳을 고른 이유';
+      const reason=document.createElement('p');reason.textContent=item.reason;
+      const actionBox=document.createElement('div');actionBox.className='note-action';const actionLabel=document.createElement('small');actionLabel.className='note-label';actionLabel.textContent='이렇게 걸어 보세요';const action=document.createElement('p');action.textContent=item.action;actionBox.append(actionLabel,action);
+      const source=document.createElement('p');source.className='note-source';source.textContent=place.facilities?'등록 시설 · '+place.facilities:'등록된 시설 정보가 없어요. 현장 안내를 확인해 주세요.';
+      const button=document.createElement('button');button.className='secondary';button.textContent='이 공원 자세히 보기 ↗';button.onclick=()=>openPlace(place);
+      row.append(top,name,facts,reasonLabel,reason,actionBox,source,button);$('ai-results').append(row);
+    }
     $('ai-status').textContent=data.cached?'같은 조건의 최근 산책 제안이에요.':'산책 제안이 준비됐어요. 마음에 드는 공원의 지도를 확인해 보세요.';
   }catch(e){if(version===aiVersion)$('ai-status').textContent=e.name==='AbortError'?'응답이 늦어지고 있어요. 다시 시도해 주세요.':e.message;}
   finally{clearTimeout(timer);if(version===aiVersion){aiController=null;$('ai-suggest').disabled=false;$('ai-suggest').textContent='AI 산책 제안 다시 받기 ↗';$('ai-walk').setAttribute('aria-busy','false');}}
