@@ -1,3 +1,70 @@
+# 12주차 · AI 산책 제안 (2026-11-18)
+
+기존 Sanchek 서비스에 Open HASA AI 산책 제안을 추가했습니다. 이 폴더는 11월 11일 프로젝트의 별도 사본이며 기존 운영 사이트에 아직 배포하지 않았습니다.
+
+## 사용 방법
+
+1. 출발 지역과 반경을 선택하고 공원을 검색합니다.
+2. 산책 목적(가볍게 쉬기 / 활기차게 걷기 / 아이와 함께 걷기)을 고릅니다.
+3. AI 산책 제안 받기를 누르면 필터에 맞는 가까운 12개 공원 중 최대 3개를 추천합니다. 후보가 1~2개이면 그 수만큼 추천합니다.
+4. 추천 카드에서 지도와 후기를 열 수 있습니다.
+
+## 배포 설정
+
+기존 Vercel 프로젝트에 이 소스를 배포합니다. 기존 Supabase 및 공공데이터 환경 변수는 그대로 필요합니다.
+
+- Vercel → 해당 프로젝트 → Settings → Environment Variables
+- `HASA_API_KEY`: Open HASA에서 직접 발급한 키. Sensitive로 저장하고 Production 환경을 선택합니다.
+- `HASA_MODEL`: 선택. 기본값 `gemma-4-31b`. 계정 Playground에서 사용 가능한 모델인지 확인하고 필요하면 변경합니다.
+- 환경 변수 저장 후 재배포해야 반영됩니다.
+- 키를 대화창, 코드, README, 저장소에 붙여 넣지 않습니다.
+- 로컬은 `.env.example`을 `.env.local`로 복사해 직접 입력하고 `node scripts/dev.mjs`를 실행합니다.
+- Open HASA: https://open.hasa.re.kr/ ; 개발키: https://open.hasa.re.kr/account/dev-keys
+- 이 폴더에는 실제 인증키가 포함되지 않습니다. 기존 운영 사이트의 자격증명도 복사하지 않았습니다.
+
+## 구현과 개인정보
+
+`POST /api/suggest`: `{ "ids": ["park/..."], "goal": "gentle" }`. goal은 gentle/active/family만 허용합니다. 서버가 ID를 전국 공원 데이터에서 확인하고 공원 이름·종류·시설(최대 240자)·면적과 목적만 Open HASA로 보냅니다. 좌표, 사용자 이름, 댓글, 자유 입력은 보내지 않습니다. 공원 선택으로 대략적 관심 지역이 추론될 수 있습니다.
+
+AI 답변을 DB나 브라우저 저장소에 저장하지 않습니다. 같은 조건의 결과는 따뜻한 함수 인스턴스 메모리에 5분간, 최대 100개 보관합니다. 재시작하면 사라지고 만료 결과는 재사용하지 않습니다. 공급자의 보관 정책은 별도입니다. 원문 요청과 응답 또는 키를 로그에 출력하지 않습니다.
+
+20초 타임아웃, max_tokens 600, 최대 12개 후보, 중복 클릭 방지, 요청 변경 시 취소, 후보 ID·추천 수·중복·형식 검증을 적용했습니다. 추천 문장은 textContent로 표시합니다. AI의 실제 내용이 항상 정확함을 보장하지는 않습니다.
+
+함수 인스턴스별 동시 1건 및 최소 6초 간격을 적용했습니다. 여러 서버 인스턴스 전체에 적용되는 제한은 아닙니다. 하루/분당 계정 한도는 Open HASA가 집행하며 429 안내를 표시합니다. 수업 자료의 개발키 한도는 분당 10회/일 500건이지만 실제 계정의 최신 한도를 확인하세요. 대규모 공개 운영 전에는 중앙 저장소 기반 제한이 추가로 필요합니다. 개발키는 수업·시연용이며 승인된 운영키를 대체하지 않습니다.
+
+## 검증 기록
+
+2026-11-18 `node --test tests/*.test.mjs`: **51개 통과, 실패 0개** (기존 42개 + AI 9개).
+
+| 항목 | 결과 |
+|---|---|
+| 정상 추천, 서버 데이터 조회, 전송 필드 최소화 | 가짜 AI 응답으로 통과 |
+| 잘못된 입력 / 키 없음 / 429 | 통과: 400 / 500 / 429 |
+| 공급자 인증 오류 / 서버 오류 | 통과: 503 / 502, 원문과 키 미노출 |
+| 연결·본문 수신 시간 초과 | 통과: 504 |
+| 존재하지 않는 공원·중복·빈 결과·키 포함 응답 | 통과: 502로 거절 |
+| 후보가 3개 미만 | 통과: 실제 후보 수만큼 반환 |
+| 동시 요청 제한 / 5분 캐시 및 만료 | 통과 |
+| 실제 브라우저 모바일 폭 | 지역 선택 → 검색 → AI 버튼 활성화 → 키 미설정 안내 확인 |
+| 실제 Open HASA 응답 | 미검증: 키 설정 필요 |
+| 운영 주소와 AI 배포 | 미배포. 기존 운영 주소의 AI 기능은 아직 변경되지 않음 |
+
+실제 키 설정 및 배포 후 공원 3개 추천, 목적 변경, 지도 연결, 모바일 화면, 응답·화면 소스에 키 미노출을 확인하고 기록합니다. 오류를 유도하려고 운영 키를 삭제하거나 실제 한도를 소진하지 않습니다.
+
+## 사용자 피드백과 반영
+
+아래는 기록용 빈 양식입니다. 실제 사용자 피드백을 받은 뒤 작성합니다.
+
+| 사용자 | 해 본 작업 | 막힌 곳 / 좋았던 점 | 변경 제안 | 반영 내용과 근거 |
+|---|---|---|---|---|
+| 1 | 대기 | 대기 | 대기 | 대기 |
+| 2 | 대기 | 대기 | 대기 | 대기 |
+| 3 | 대기 | 대기 | 대기 | 대기 |
+
+---
+
+아래는 기존 서비스 기록입니다. 과거 검증 결과는 AI 배포의 증거가 아닙니다.
+
 # 산책 Sanchek · 한국 내 주변 공원 산책 추천
 
 운영 URL: https://holiday-api-tau.vercel.app/
@@ -196,3 +263,41 @@ where table_schema = 'public' and table_name = 'guestbook'
 
 공식 SDK: https://supabase.com/docs/reference/javascript/insert
 RLS 공식 문서: https://supabase.com/docs/guides/database/postgres/row-level-security
+
+## 第 10 週交付與部署驗收
+
+2026-11-11 重新執行 `node --test`，42 項全部通過。包含原公休日 17 項、留言板 17 項、Sanchek 8 項。本機測試使用替身驗證 Supabase 呼叫；正式部署的瀏覽器驗收結果如下。
+
+### Supabase
+
+- 新專案分別執行 `supabase/guestbook.sql` 和 `supabase/walk-comments.sql`。先確認同名表是否已存在。全新專案的公園評論表已支援官方公園 ID；`walk-official-ids.sql` 只供使用舊版欄位約束的資料庫升級。
+- Sanchek 用 `place_id` 分開各公園的評論，收集暱稱和留言。資料庫只開放公開讀取，寫入由 `api/comments.js` 驗證後處理。
+- 執行上面的權限查詢，確認 RLS 為 true，公開讀取政策只有一條，anon 和 authenticated 都只有 SELECT。對兩張表分別查核。
+- 在 SQL Editor 單獨執行以下交易，預期得到權限拒絕。若介面顯示交易仍開啟，另執行 ROLLBACK。
+
+```sql
+begin;
+set local role anon;
+insert into public.guestbook(name, message) values ('verify', 'RLS check');
+rollback;
+```
+
+### Vercel
+
+填入 `SUPABASE_URL`、`SUPABASE_PUBLISHABLE_KEY`、`SUPABASE_SECRET_KEY` 後重新部署。使用正式網域完成驗收，將結果填入下表。
+
+| 項目 | 預期 | 實測 |
+|---|---|---|
+| 正式留言板網址 | /guestbook.html 可開啟 | [已開啟](https://holiday-api-tau.vercel.app/guestbook.html) |
+| GET /api/guestbook | 200，最近 20 筆以內 | 正式 API 回傳留言清單，頁面重新整理後讀到已保存的留言 |
+| POST 空暱稱、201 字、非 JSON | 各回傳 400 | 待驗證 |
+| POST 正常留言 | 201，重新載入後仍可讀取 | 頁面顯示已保存，重新整理後仍可讀取。HTTP 狀態碼未獨立擷取 |
+| anon 直接 INSERT | 權限拒絕 | 待驗證 |
+| 頁面與 API 回應 | 沒有金鑰 | 待驗證 |
+| Sanchek 公園評論 | 選定公園後發表，再次開啟仍出現在同一公園 | 通過。이문1구역 어린이공원顯示 Week 10 QA 測試評論 |
+
+### Claude Code 的 Supabase MCP
+
+项目根目录的 `.mcp.json` 已指定 Supabase 开发项目 `guestbook-dev`。从项目根目录启动 Claude Code。
+
+在 Claude Code 输入 `/mcp`，选择 **supabase → Authenticate**，在浏览器授权对应组织。回到 Claude Code 确认状态为 Connected，再请它用 MCP 列出 `public` 的表，核对是否有 `guestbook` 和 `walk_comments`。
